@@ -72,14 +72,35 @@ bool write_stadium(const std::string& filename, const Stadium& stadium){
     std::vector<float>    cellVolumes;
 
     for (int l = 0; l < stadium.num_layers; l++){
-      float  dim_z    = 1.0f / (stadium.num_layers - 1);
+      float  elem_dim_z    = 1.0f / (stadium.num_layers - 1);
       float  offset_z = static_cast<float>(l) / (stadium.num_layers - 1);
       
       size_t offset_cellBoxes   = cellBoxes.size();
       size_t offset_points      = points.size();
       size_t offset_cellVectors = cellVectors.size();
       
-        stadium.layer_types[l].size()
+      for (size_t i = 0; i < stadium.layer_types[l].size(); i++){
+        for (size_t j = 0; j < stadium.layer_types[l][i].size(); j++){
+          
+          float elem_dim_x = 1.0f / static_cast<float>(stadium.layer_types[l].size() - 1);
+          float elem_dim_y = 1.0f / static_cast<float>(stadium.layer_types[l][i].size() - 1);
+
+          float offset_x = static_cast<float>(i) / static_cast<float>(stadium.layer_types[l].size() - 1);
+          float offset_y = static_cast<float>(j) / static_cast<float>(stadium.layer_types[l][i].size() - 1);
+
+          uint32_t block_type = stadium.layer_types[l][i][j];
+          int dims[3] = { stadium.block_sizes[3 * block_type + 0], stadium.block_sizes[3 * block_type + 1], stadium.block_sizes[3 * block_type + 2] };
+
+          for (int d0 = 0; d0 < dims[0]; d0++)
+            for (int d1 = 0; d1 < dims[1]; d1++)
+              for (int d2 = 0; d2 < dims[2]; d2++){
+
+                float x = ;
+
+              }
+
+        }
+      }
     }
 
     std::cout << "saveBinary: saving " << filename << std::endl;
