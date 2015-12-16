@@ -8,6 +8,7 @@
 void main(){
 
   Stadium stadium;
-  read_stadium("stadium.def", stadium);
+  read_stadium_definition("stadium.def", stadium);
+  write_stadium("test.stadium", stadium);
 
 }
