@@ -42,6 +42,7 @@ struct Stadium {
   std::vector<int>                            block_sizes;
   std::vector<std::vector<std::vector<int>>>  layer_types;
   std::vector<int>                            layers;
+  std::vector<AABB>                           layer_bbox;
 };
 
 void read_stadium_definition(const std::string& stadium_filename, Stadium& stadium){
@@ -74,8 +75,11 @@ void read_stadium_definition(const std::string& stadium_filename, Stadium& stadi
   // Read the layers
   infile >> stadium.num_layers;
   stadium.layers.resize(stadium.num_layers);
-  for (auto& layer : stadium.layers){
-    infile >> layer;
+  stadium.layer_bbox.resize(stadium.num_layers);
+  for (int i = 0; i < stadium.num_layers; i++){
+    infile  >> stadium.layer_bbox[i].min.v[0] >> stadium.layer_bbox[i].min.v[1] >> stadium.layer_bbox[i].min.v[2]
+            >> stadium.layer_bbox[i].max.v[0] >> stadium.layer_bbox[i].max.v[1] >> stadium.layer_bbox[i].max.v[2];
+    infile  >> stadium.layers[i];
   }
 }
 
@@ -94,69 +98,83 @@ bool write_stadium(const std::string& filename, const Stadium& stadium){
     std::vector<float3>   pointVectors;
     std::vector<float>    cellVolumes;
 
-    float len[] = {1.0f, 1.0f, 4.0f};
+    float len[] = { 0.25f, 0.25f, 0.25f };
 
     for (int l = 0; l < stadium.num_layers; l++){
-      float  elem_dim_z    = 1.0 / (stadium.num_layers - 1);
-      float  offset_z = static_cast<float>(l) / (stadium.num_layers - 1);
-      
-      size_t offset_cellBoxes   = cellBoxes.size();
-      
+      float layer_dim[3] = {
+        stadium.layer_bbox[l].max.v[0] - stadium.layer_bbox[l].min.v[0],
+        stadium.layer_bbox[l].max.v[1] - stadium.layer_bbox[l].min.v[1],
+        stadium.layer_bbox[l].max.v[2] - stadium.layer_bbox[l].min.v[2]
+      };
+
+      float  elem_dim_z = layer_dim[2];
+      float  offset_z = stadium.layer_bbox[l].min.v[2]; // static_cast<float>(l) / (stadium.num_layers - 1);
+
+      size_t offset_cellBoxes = cellBoxes.size();
+
       size_t offset_cellVectors = cellVectors.size();
 
-      int layer_type = stadium.layers[l];
-      
-      for (size_t i = 0; i < stadium.layer_types[layer_type].size() - 1; i++){
-        for (size_t j = 0; j < stadium.layer_types[layer_type][i].size() - 1; j++){
-          
-          float elem_dim_x = 1.0f / static_cast<float>(stadium.layer_types[layer_type].size() - 1);
-          float elem_dim_y = 1.0f / static_cast<float>(stadium.layer_types[layer_type][i].size() - 1);
 
-          float offset_x = static_cast<float>(i) * elem_dim_x;
-          float offset_y = static_cast<float>(j) * elem_dim_y;
+      int layer_type = stadium.layers[l];
+
+      for (size_t i = 0; i < stadium.layer_types[layer_type].size(); i++){
+        for (size_t j = 0; j < stadium.layer_types[layer_type][i].size(); j++){
+
+          float elem_dim_x = 1.0f / static_cast<float>(stadium.layer_types[layer_type].size()) * layer_dim[0];
+          float elem_dim_y = 1.0f / static_cast<float>(stadium.layer_types[layer_type][i].size()) * layer_dim[1];
+
+          float offset_x = stadium.layer_bbox[l].min.v[0] + static_cast<float>(i)* elem_dim_x;
+          float offset_y = stadium.layer_bbox[l].min.v[1] + static_cast<float>(j)* elem_dim_y;
 
           uint32_t block_type = stadium.layer_types[layer_type][i][j];
           int dims[3] = { stadium.block_sizes[3 * block_type + 0], stadium.block_sizes[3 * block_type + 1], stadium.block_sizes[3 * block_type + 2] };
 
-          uint32_t offset_points = static_cast<uint32_t>( points.size() );
+          uint32_t offset_points = static_cast<uint32_t>(points.size());
 
           // Generating the points
-          for (int d0 = 0; d0 < dims[0]; d0++)
-            for (int d1 = 0; d1 < dims[1]; d1++)
-              for (int d2 = 0; d2 < dims[2]; d2++){
+          for (int d0 = 0; d0 <= dims[0]; d0++)
+            for (int d1 = 0; d1 <= dims[1]; d1++)
+              for (int d2 = 0; d2 <= dims[2]; d2++){
 
-                float local_x = static_cast<float>(d0) / static_cast<float>(dims[0] - 1);
-                float local_y = static_cast<float>(d1) / static_cast<float>(dims[1] - 1);
-                float local_z = static_cast<float>(d2) / static_cast<float>(dims[2] - 1);
+                float local_x = static_cast<float>(d0) / static_cast<float>(dims[0]);
+                float local_y = static_cast<float>(d1) / static_cast<float>(dims[1]);
+                float local_z = static_cast<float>(d2) / static_cast<float>(dims[2]);
 
                 float x = (offset_x + local_x * elem_dim_x) * len[0];
                 float y = (offset_y + local_y * elem_dim_y) * len[1];
                 float z = (offset_z + local_z * elem_dim_z) * len[2];
 
                 points.push_back(float3(x, y, z));
-
               }
 
           // Adding the points to the lists
-          for (int d0 = 0; d0 < dims[0]-1; d0++)
-            for (int d1 = 0; d1 < dims[1]-1; d1++)
-              for (int d2 = 0; d2 < dims[2]-1; d2++){
+          for (int d0 = 0; d0 < dims[0]; d0++)
+            for (int d1 = 0; d1 < dims[1]; d1++)
+              for (int d2 = 0; d2 < dims[2]; d2++){
+
+                int p0 = (offset_points +  d0      * (dims[1] + 1) * (dims[2] + 1) +  d1       * (dims[2] + 1) + d2    );
+                int p1 = (offset_points + (d0 + 1) * (dims[1] + 1) * (dims[2] + 1) +  d1       * (dims[2] + 1) + d2    );
+                int p2 = (offset_points + (d0 + 1) * (dims[1] + 1) * (dims[2] + 1) +  d1       * (dims[2] + 1) + d2 + 1);
+                int p3 = (offset_points +  d0      * (dims[1] + 1) * (dims[2] + 1) +  d1       * (dims[2] + 1) + d2 + 1);
+                int p4 = (offset_points +  d0      * (dims[1] + 1) * (dims[2] + 1) + (d1 + 1)  * (dims[2] + 1) + d2    );
+                int p5 = (offset_points + (d0 + 1) * (dims[1] + 1) * (dims[2] + 1) + (d1 + 1)  * (dims[2] + 1) + d2    );
+                int p6 = (offset_points + (d0 + 1) * (dims[1] + 1) * (dims[2] + 1) + (d1 + 1)  * (dims[2] + 1) + d2 + 1);
+                int p7 = (offset_points +  d0      * (dims[1] + 1) * (dims[2] + 1) + (d1 + 1)  * (dims[2] + 1) + d2 + 1);
 
                 cellPointsBegIndices.push_back(static_cast<uint32_t>(cellPoints.size()));
-                cellPoints.push_back( 8 );
-                cellPoints.push_back(offset_points +  d0      * dims[1] * dims[2] +  d1       * dims[2] + d2    );
-                cellPoints.push_back(offset_points + (d0 + 1) * dims[1] * dims[2] +  d1       * dims[2] + d2    );
-                cellPoints.push_back(offset_points + (d0 + 1) * dims[1] * dims[2] +  d1       * dims[2] + d2 + 1);
-                cellPoints.push_back(offset_points +  d0      * dims[1] * dims[2] +  d1       * dims[2] + d2 + 1);
-                cellPoints.push_back(offset_points +  d0      * dims[1] * dims[2] + (d1 + 1)  * dims[2] + d2    );
-                cellPoints.push_back(offset_points + (d0 + 1) * dims[1] * dims[2] + (d1 + 1)  * dims[2] + d2    );
-                cellPoints.push_back(offset_points + (d0 + 1) * dims[1] * dims[2] + (d1 + 1)  * dims[2] + d2 + 1);
-                cellPoints.push_back(offset_points +  d0      * dims[1] * dims[2] + (d1 + 1)  * dims[2] + d2 + 1);
-
-              }
-        }
+                cellPoints.push_back(8);
+                cellPoints.push_back(p0);
+                cellPoints.push_back(p1);
+                cellPoints.push_back(p2);
+                cellPoints.push_back(p3);
+                cellPoints.push_back(p4);
+                cellPoints.push_back(p5);
+                cellPoints.push_back(p6);
+                cellPoints.push_back(p7);
+            }
       }
     }
+  }
 
     // setting the cell volumes and vectors
     cellVectors.resize(cellPointsBegIndices.size());

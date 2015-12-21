@@ -166,22 +166,28 @@ void Application::create() {
   std::vector<float> colors;
   std::vector<int> indices;
 
-  float len[] = { 0.25f, 0.25f, 1.0f };
+  float len[] = { 0.25f, 0.25f, 0.25f };
 
   for (int l = 0; l < stadium.num_layers; l++){
-    float  elem_dim_z = 1.0 / (stadium.num_layers - 1);
-    float  offset_z = static_cast<float>(l) / (stadium.num_layers - 1);
+    float layer_dim[3] = {
+      stadium.layer_bbox[l].max.v[0] - stadium.layer_bbox[l].min.v[0],
+      stadium.layer_bbox[l].max.v[1] - stadium.layer_bbox[l].min.v[1],
+      stadium.layer_bbox[l].max.v[2] - stadium.layer_bbox[l].min.v[2]
+    };
+
+    float  elem_dim_z = layer_dim[2];
+    float  offset_z = stadium.layer_bbox[l].min.v[2]; // static_cast<float>(l) / (stadium.num_layers - 1);
 
     int layer_type = stadium.layers[l];
 
     for (size_t i = 0; i < stadium.layer_types[layer_type].size(); i++){
       for (size_t j = 0; j < stadium.layer_types[layer_type][i].size(); j++){
 
-        float elem_dim_x = 1.0f / static_cast<float>(stadium.layer_types[layer_type].size());
-        float elem_dim_y = 1.0f / static_cast<float>(stadium.layer_types[layer_type][i].size());
+        float elem_dim_x = 1.0f / static_cast<float>(stadium.layer_types[layer_type].size()) * layer_dim[0];
+        float elem_dim_y = 1.0f / static_cast<float>(stadium.layer_types[layer_type][i].size()) * layer_dim[1];
 
-        float offset_x = static_cast<float>(i) * elem_dim_x;
-        float offset_y = static_cast<float>(j) * elem_dim_y;
+        float offset_x = stadium.layer_bbox[l].min.v[0] + static_cast<float>(i)* elem_dim_x;
+        float offset_y = stadium.layer_bbox[l].min.v[1] + static_cast<float>(j)* elem_dim_y;
 
         uint32_t block_type = stadium.layer_types[layer_type][i][j];
         int dims[3] = { stadium.block_sizes[3 * block_type + 0], stadium.block_sizes[3 * block_type + 1], stadium.block_sizes[3 * block_type + 2] };
@@ -304,7 +310,7 @@ void Application::create() {
 void Application::update(float time, float timeSinceLastFrame) {
   float v = (float)clock() / 3000.0f * glm::pi<float>();
   m_inv_viewmat = glm::inverse(m_viewmat);
-  m_viewmat = glm::lookAt(glm::vec3(sin(v), 1.0f, cos(v)), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+  m_viewmat = glm::lookAt(6.0f * glm::vec3(sin(v), 1.0f, cos(v)), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
   m_projmat = glm::perspective(glm::pi<float>() / 3.0f, (float)m_width / m_height, 0.1f, 1000.0f);
 }
 
